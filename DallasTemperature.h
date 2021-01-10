@@ -27,7 +27,7 @@
 
 // Model IDs
 #define DS18S20MODEL 0x10  // also DS1820
-#define DS18B20MODEL 0x28
+#define DS18B20MODEL 0x28  // also MAX31820
 #define DS1822MODEL  0x22
 #define DS1825MODEL  0x3B
 #define DS28EA00MODEL 0x42
@@ -38,8 +38,26 @@
 #define DEVICE_DISCONNECTED_RAW -7040
 
 // For readPowerSupply on oneWire bus
-#ifndef nullptr
-#define nullptr NULL
+// definition of nullptr for C++ < 11, using official workaround:
+// http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2007/n2431.pdf
+#if __cplusplus < 201103L
+const class
+{
+public:
+	template <class T>
+	operator T *() const
+	{
+		return 0;
+	}
+	template <class C, class T>
+	operator T C::*() const
+	{
+		return 0;
+	}
+
+private:
+	void operator&() const;
+} nullptr = {};
 #endif
 
 typedef uint8_t DeviceAddress[8];
@@ -140,7 +158,31 @@ public:
 	// Is a conversion complete on the wire? Only applies to the first sensor on the wire.
 	bool isConversionComplete(void);
 
-    int16_t millisToWaitForConversion(uint8_t);
+  static uint16_t millisToWaitForConversion(uint8_t);
+  
+  uint16_t millisToWaitForConversion();
+  
+  // Sends command to one device to save values from scratchpad to EEPROM by index
+  // Returns true if no errors were encountered, false indicates failure
+  bool saveScratchPadByIndex(uint8_t);
+  
+  // Sends command to one or more devices to save values from scratchpad to EEPROM
+  // Returns true if no errors were encountered, false indicates failure
+  bool saveScratchPad(const uint8_t* = nullptr);
+  
+  // Sends command to one device to recall values from EEPROM to scratchpad by index
+  // Returns true if no errors were encountered, false indicates failure
+  bool recallScratchPadByIndex(uint8_t);
+  
+  // Sends command to one or more devices to recall values from EEPROM to scratchpad
+  // Returns true if no errors were encountered, false indicates failure
+  bool recallScratchPad(const uint8_t* = nullptr);
+  
+  // Sets the autoSaveScratchPad flag
+  void setAutoSaveScratchPad(bool);
+  
+  // Gets the autoSaveScratchPad flag
+  bool getAutoSaveScratchPad(void);
 
 #if REQUIRESALARMS
 
@@ -204,6 +246,9 @@ public:
 	// convert from raw to Celsius
 	static float rawToCelsius(int16_t);
 
+    // convert from Celsius to raw
+	static int16_t celsiusToRaw(float);
+
 	// convert from raw to Fahrenheit
 	static float rawToFahrenheit(int16_t);
 
@@ -216,6 +261,8 @@ public:
 	void operator delete(void*);
 
 #endif
+
+	void blockTillConversionComplete(uint8_t);
 
 private:
 	typedef uint8_t ScratchPad[9];
@@ -237,6 +284,9 @@ private:
 	// used to requestTemperature to dynamically check if a conversion is complete
 	bool checkForConversion;
 
+  // used to determine if values will be saved from scratchpad to EEPROM on every scratchpad write
+  bool autoSaveScratchPad;
+
 	// count of devices on the bus
 	uint8_t devices;
 
@@ -249,7 +299,6 @@ private:
 	// reads scratchpad and returns the raw temperature
 	int16_t calculateTemperature(const uint8_t*, uint8_t*);
 
-	void blockTillConversionComplete(uint8_t);
 
 	// Returns true if all bytes of scratchPad are '\0'
 	bool isAllZeros(const uint8_t* const scratchPad, const size_t length = 9);
